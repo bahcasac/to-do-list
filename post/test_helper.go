@@ -1,12 +1,9 @@
-// usage:
-// testDB := testhelpers.NewTestDatabase(t)
-// defer testDB.Close(t)
-// println(testDB.ConnectionString(t))
 package post
 
 import (
 	"context"
 	"fmt"
+	"gorm.io/gorm"
 	"testing"
 	"time"
 
@@ -16,61 +13,61 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const (
-	dbUser     = "postgres"
-	dbPassword = "workshop"
-	database   = "workshop"
-)
-
-type PostgresContainer struct {
+type TestDatabase struct {
 	instance testcontainers.Container
-	DSN      string
 }
 
-func SetupPostgres(ctx context.Context) (*PostgresContainer, error) {
-	fmt.Println("comecou...")
+func NewTestDatabase() *TestDatabase {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	req := testcontainers.ContainerRequest{
-		Image:        "postgres:11.6-alpine",
-		ExposedPorts: []string{"5433/tcp"},
+		Image:        "postgres:12",
+		ExposedPorts: []string{"5432/tcp"},
+		AutoRemove:   true,
 		Env: map[string]string{
-			"POSTGRES_PASSWORD": dbPassword,
-			"POSTGRES_USER":     dbUser,
-			"POSTGRES_DATABASE": database,
+			"POSTGRES_USER":     "postgres",
+			"POSTGRES_PASSWORD": "postgres",
+			"POSTGRES_DB":       "postgres",
 		},
-		WaitingFor: wait.ForLog("database system is ready to accept connections"),
+		WaitingFor: wait.ForListeningPort("5432/tcp"),
 	}
-	fmt.Println("comecou 2...")
-	postgres, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+	postgres, _ := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
-	if err != nil {
-		fmt.Println("erro ao gerar o container...")
-		return nil, err
-	}
 
-	mappedPort, err := postgres.MappedPort(ctx, "5433")
-	if err != nil {
-		fmt.Println("erro para pegar a porta...")
-		return nil, err
-	}
-
-	hostIP, err := postgres.Host(ctx)
-	if err != nil {
-		fmt.Println("erro para pegar o host")
-		return nil, err
-	}
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
-		hostIP, dbUser, dbPassword, database, mappedPort.Int())
-
-	return &PostgresContainer{
+	return &TestDatabase{
 		instance: postgres,
-		DSN:      dsn,
-	}, nil
+	}
 }
 
-func (db *PostgresContainer) Close(t *testing.T) {
+func (db *TestDatabase) Port(t *testing.T) int {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	p, err := db.instance.MappedPort(ctx, "5432")
+	require.NoError(t, err)
+	return p.Int()
+}
+
+func (db *TestDatabase) ConnectionString(t *testing.T) string {
+	return fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", db.Port(t))
+}
+
+func (db *TestDatabase) Close(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	require.NoError(t, db.instance.Terminate(ctx))
+}
+
+func (container *TestDatabase) AutoMigrate(db *gorm.DB, post Post) error {
+	err := db.AutoMigrate(post)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (container *TestDatabase) Flush(db *gorm.DB) {
+	db.Exec("truncate table public.posts")
 }
