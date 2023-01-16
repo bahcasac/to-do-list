@@ -11,6 +11,12 @@ type Post struct {
 	Deleted_at  time.Time
 }
 
-type Store interface {
+type Repository interface {
 	Save(post Post) error
+	FindAll() ([]Post, error)
+	Find() ([]Post, error)
+}
+
+type UseCase interface {
+	Create(post Post) error
 }

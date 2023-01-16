@@ -1,7 +1,6 @@
-package postgres
+package post
 
 import (
-	"github.com/bahcasac/stock/post"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestCRUD(t *testing.T) {
-	container := post.NewTestDatabase()
+	container := NewTestDatabase()
 	db, err := connection(container.ConnectionString(t))
 	if err != nil {
 		log.Fatal(err)
@@ -20,7 +19,7 @@ func TestCRUD(t *testing.T) {
 	p := Postgres{
 		DB: db,
 	}
-	item := post.Post{
+	item := Post{
 		ID:          "124",
 		Title:       "Teste 02",
 		Description: "Este é um exemplo de post",
